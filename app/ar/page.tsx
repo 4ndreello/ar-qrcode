@@ -14,6 +14,7 @@ export default function ARPage() {
   const [error, setError] = useState<string | null>(null);
   const [qrDetected, setQrDetected] = useState(false);
   const [aframeReady, setAframeReady] = useState(false);
+  const [qrPosition, setQrPosition] = useState({ x: 0, y: 0 }); // Posição normalizada do QR Code (0-1)
 
   useEffect(() => {
     // Evitar múltiplas inicializações
@@ -390,8 +391,30 @@ export default function ARPage() {
               imageData.height
             );
 
-            if (code) {
+            if (code && code.location) {
               detectionTimeout = 0;
+
+              // Calcular posição central do QR Code
+              const corners = code.location;
+              const centerX =
+                (corners.topLeftCorner.x +
+                  corners.topRightCorner.x +
+                  corners.bottomLeftCorner.x +
+                  corners.bottomRightCorner.x) /
+                4;
+              const centerY =
+                (corners.topLeftCorner.y +
+                  corners.topRightCorner.y +
+                  corners.bottomLeftCorner.y +
+                  corners.bottomRightCorner.y) /
+                4;
+
+              // Normalizar para 0-1 (centro = 0.5)
+              const normalizedX = centerX / canvas.width;
+              const normalizedY = centerY / canvas.height;
+
+              setQrPosition({ x: normalizedX, y: normalizedY });
+
               setQrDetected((prev) => {
                 if (!prev) return true;
                 return prev;
@@ -423,6 +446,39 @@ export default function ARPage() {
       }
     };
   }, []); // Executar apenas uma vez na montagem
+
+  // Atualizar posições dos objetos 3D quando o QR Code se mover
+  useEffect(() => {
+    if (!qrDetected || !aframeReady) return;
+
+    const screenTo3D = (normalized: number, isX: boolean) => {
+      const range = isX ? 4 : 3;
+      return (normalized - 0.5) * 2 * range;
+    };
+
+    const x3D = screenTo3D(qrPosition.x, true);
+    const y3D = screenTo3D(1 - qrPosition.y, false);
+
+    // Atualizar posições via A-Frame API
+    const updatePositions = () => {
+      // Box
+      const boxEl = document.querySelector("#ar-box") as any;
+      if (boxEl) {
+        boxEl.setAttribute("position", `${x3D} ${y3D} -3`);
+      }
+
+      // Texto
+      const textEl = document.querySelector("#ar-text") as any;
+      if (textEl) {
+        textEl.setAttribute("position", `${x3D} ${y3D - 1.5} -3`);
+      }
+    };
+
+    // Usar requestAnimationFrame para garantir que o A-Frame está pronto
+    requestAnimationFrame(() => {
+      updatePositions();
+    });
+  }, [qrPosition, qrDetected, aframeReady]);
 
   if (isLoading) {
     return (
@@ -488,37 +544,42 @@ export default function ARPage() {
           />
 
           {/* 3D Objects that appear when QR is detected */}
-          {qrDetected && (
-            <>
-              <a-box
-                position="0 0 -3"
-                rotation="0 0 0"
-                scale="1 1 1"
-                color="#f59e0b"
-                animation="property: rotation; to: 360 360 0; loop: true; dur: 4000"
-              />
-              <a-sphere
-                position="2 0 -3"
-                radius="0.6"
-                color="#3b82f6"
-                animation="property: position; to: 2 1 -3; loop: true; dur: 2000; direction: alternate"
-              />
-              <a-sphere
-                position="-2 0 -3"
-                radius="0.6"
-                color="#ef4444"
-                animation="property: position; to: -2 1 -3; loop: true; dur: 2000; direction: alternate"
-              />
-              <a-text
-                value="QR DETECTADO!"
-                position="0 -1.5 -3"
-                align="center"
-                color="#10b981"
-                scale="0.8 0.8 0.8"
-                font="https://cdn.aframe.io/fonts/Roboto-msdf.json"
-              />
-            </>
-          )}
+          {qrDetected &&
+            (() => {
+              // Mapear posição do QR Code (0-1) para coordenadas 3D
+              // Converter de espaço de tela (0,0 no topo esquerdo) para espaço 3D (0,0 no centro)
+              // Inverter Y porque na tela Y aumenta para baixo, mas no 3D aumenta para cima
+              const screenTo3D = (normalized: number, isX: boolean) => {
+                // Converter 0-1 para -range até +range
+                const range = isX ? 4 : 3; // Range maior no X, menor no Y
+                return (normalized - 0.5) * 2 * range;
+              };
+
+              const x3D = screenTo3D(qrPosition.x, true);
+              const y3D = screenTo3D(1 - qrPosition.y, false); // Inverter Y
+
+              return (
+                <>
+                  <a-box
+                    id="ar-box"
+                    position={`${x3D} ${y3D} -3`}
+                    rotation="0 0 0"
+                    scale="1 1 1"
+                    color="#f59e0b"
+                    animation="property: rotation; to: 360 360 0; loop: true; dur: 4000"
+                  />
+                  <a-text
+                    id="ar-text"
+                    value="QR DETECTADO!"
+                    position={`${x3D} ${y3D - 1.5} -3`}
+                    align="center"
+                    color="#10b981"
+                    scale="0.8 0.8 0.8"
+                    font="https://cdn.aframe.io/fonts/Roboto-msdf.json"
+                  />
+                </>
+              );
+            })()}
         </a-scene>
       )}
 
