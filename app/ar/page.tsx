@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
 import Link from "next/link";
 
 export default function ARPage() {
@@ -15,6 +17,9 @@ export default function ARPage() {
   const [qrDetected, setQrDetected] = useState(false);
   const [aframeReady, setAframeReady] = useState(false);
   const [qrPosition, setQrPosition] = useState({ x: 0, y: 0 }); // Posição normalizada do QR Code (0-1)
+  const [boxSize, setBoxSize] = useState(1); // Tamanho do cubo (scale)
+  const [boxColor, setBoxColor] = useState("#f59e0b"); // Cor do cubo
+  const [showControls, setShowControls] = useState(false); // Mostrar/esconder controles
 
   useEffect(() => {
     // Evitar múltiplas inicializações
@@ -465,6 +470,8 @@ export default function ARPage() {
       const boxEl = document.querySelector("#ar-box") as any;
       if (boxEl) {
         boxEl.setAttribute("position", `${x3D} ${y3D} -3`);
+        boxEl.setAttribute("scale", `${boxSize} ${boxSize} ${boxSize}`);
+        boxEl.setAttribute("color", boxColor);
       }
 
       // Texto
@@ -478,7 +485,7 @@ export default function ARPage() {
     requestAnimationFrame(() => {
       updatePositions();
     });
-  }, [qrPosition, qrDetected, aframeReady]);
+  }, [qrPosition, qrDetected, aframeReady, boxSize, boxColor]);
 
   if (isLoading) {
     return (
@@ -564,8 +571,8 @@ export default function ARPage() {
                     id="ar-box"
                     position={`${x3D} ${y3D} -3`}
                     rotation="0 0 0"
-                    scale="1 1 1"
-                    color="#f59e0b"
+                    scale={`${boxSize} ${boxSize} ${boxSize}`}
+                    color={boxColor}
                     animation="property: rotation; to: 360 360 0; loop: true; dur: 4000"
                   />
                   <a-text
@@ -603,15 +610,89 @@ export default function ARPage() {
         </div>
       </div>
 
+      {/* Controls Panel */}
+      {qrDetected && (
+        <div className="absolute bottom-0 left-0 right-0 bg-black/90 text-white p-4 rounded-t-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold">Controles do Objeto</h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowControls(!showControls)}
+              className="text-white hover:bg-white/20"
+            >
+              {showControls ? "▼" : "▲"}
+            </Button>
+          </div>
+
+          {showControls && (
+            <div className="space-y-4">
+              {/* Tamanho */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center justify-between">
+                  <span>Tamanho</span>
+                  <span className="text-xs opacity-70">
+                    {boxSize.toFixed(2)}x
+                  </span>
+                </label>
+                <Slider
+                  value={[boxSize]}
+                  onValueChange={([value]) => setBoxSize(value)}
+                  min={0.1}
+                  max={3}
+                  step={0.1}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Cor */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Cor</label>
+                <div className="flex gap-3 items-center">
+                  <Input
+                    type="color"
+                    value={boxColor}
+                    onChange={(e) => setBoxColor(e.target.value)}
+                    className="h-10 w-20 cursor-pointer"
+                  />
+                  <Input
+                    type="text"
+                    value={boxColor}
+                    onChange={(e) => setBoxColor(e.target.value)}
+                    placeholder="#f59e0b"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+
+              {/* Reset Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setBoxSize(1);
+                  setBoxColor("#f59e0b");
+                }}
+                className="w-full text-white border-white/20 hover:bg-white/10"
+              >
+                Resetar Padrões
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Instructions */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white text-center">
-        <p className="text-sm font-medium">
-          Aponte para o QR Code para ver a experiência AR
-        </p>
-        <p className="text-xs opacity-80 mt-1">
-          Certifique-se de ter boa iluminação
-        </p>
-      </div>
+      {!qrDetected && (
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white text-center">
+          <p className="text-sm font-medium">
+            Aponte para o QR Code para ver a experiência AR
+          </p>
+          <p className="text-xs opacity-80 mt-1">
+            Certifique-se de ter boa iluminação
+          </p>
+        </div>
+      )}
     </div>
   );
 }
